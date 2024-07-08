@@ -6,7 +6,8 @@ import pandas as pd
 # import polars as pl
 
 # 完整版行情结构体
-CThostFtdcDepthMarketDataField = np.dtype([
+DepthMarketData = np.dtype([
+    ('now', '<M8[ns]'),  # 添加本地时间字段
     ('TradingDay', 'S9'),
     ('reserve1', 'S31'),
     ('ExchangeID', 'S9'),
@@ -63,22 +64,22 @@ ROW_COUNT = 8 * 3600 * 2 * 4
 filename = r'demo/ctp.bin'
 if Path(filename).exists():
     # 以读模式打开，不占用文件
-    arr = np.memmap(filename, dtype=CThostFtdcDepthMarketDataField, shape=(ROW_COUNT,), mode='r')
+    arr = np.memmap(filename, dtype=DepthMarketData, shape=(ROW_COUNT,), mode='r')
 else:
     # 清空并占用了文件，创建后需要立即释放
-    arr = np.memmap(filename, dtype=CThostFtdcDepthMarketDataField, shape=(ROW_COUNT,), mode='w+')
-    arr = np.memmap(filename, dtype=CThostFtdcDepthMarketDataField, shape=(ROW_COUNT,), mode='r')
+    arr = np.memmap(filename, dtype=DepthMarketData, shape=(ROW_COUNT,), mode='w+')
+    arr = np.memmap(filename, dtype=DepthMarketData, shape=(ROW_COUNT,), mode='r')
 
 # 打印转DataFrame格式
 print(pd.DataFrame(arr))
 # print(pl.from_numpy(arr))
 
-
+last_row = 0
 while True:
     x = input('输入`q`退出；输入其它键打印最新数据')
     if x == 'q':
         break
     # 打印最新的5条
-    m = (arr['ClosePrice'] == 0).argmax()
-    a = arr[:m]
-    print(m, a[-5:], sep='\n')
+    last_row = arr['now'].argmax()
+    a = arr[:last_row]
+    print(last_row, a[-5:], sep='\n')

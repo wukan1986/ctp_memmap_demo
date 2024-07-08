@@ -19,9 +19,10 @@
 #include <map>
 #include "time.h"
 #include "memmap.hpp"
+#include <chrono>
 
 using namespace std;
-FILE *logfile;
+FILE* logfile;
 
 // 报单录入操作是否完成的标志
 // Create a manual reset event with no signal
@@ -93,11 +94,11 @@ TThostFtdcAppIDType	g_chAppID;
 
 HANDLE xinhao = CreateEvent(NULL, false, false, NULL);
 
-CTraderApi *pUserApi = new CTraderApi;
+CTraderApi* pUserApi = new CTraderApi;
 
 struct DepthMarketData
 {
-	SYSTEMTIME time;
+	uint64_t now;
 	CThostFtdcDepthMarketDataField data;
 };
 
@@ -112,18 +113,18 @@ public:
 
 public:
 	// 构造函数，需要一个有效的指向CThostFtdcMduserApi实例的指针
-	CSimpleMdHandler(CThostFtdcMdApi *pUserApi) : m_pUserMdApi(pUserApi)
+	CSimpleMdHandler(CThostFtdcMdApi* pUserApi) : m_pUserMdApi(pUserApi)
 	{
 		// 指定文件必需存在并且长度不为0
 		m_mmap = filemap<false>("ctp.bin");
-		m_max_row = m_mmap.size()/sizeof(CThostFtdcDepthMarketDataField);
+		m_max_row = m_mmap.size() / sizeof(DepthMarketData);
 
 		// 更新位置
 		m_curr_row = 0;
-		auto p = (CThostFtdcDepthMarketDataField*)m_mmap.data();
-		for(auto i=0;i< m_max_row;++i)
+		auto p = (DepthMarketData*)m_mmap.data();
+		for (auto i = 0; i < m_max_row; ++i)
 		{
-			if (*(p + i)->TradingDay == 0)
+			if ((p + i)->now == 0)
 			{
 				m_curr_row = i;
 				break;
@@ -200,8 +201,8 @@ public:
 	}
 
 	// 当客户端发出登录请求之后，该方法会被调用，通知客户端登录是否成功
-	virtual void OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin,
-		CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUserLogin(CThostFtdcRspUserLoginField* pRspUserLogin,
+		CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspUserLogin>\n");
 		if (pRspUserLogin)
@@ -263,7 +264,7 @@ public:
 	void UnSubscribeMarketData()
 	{
 		int md_num = 0;
-		char **ppInstrumentID = new char*[5000];
+		char** ppInstrumentID = new char* [5000];
 		for (int count1 = 0; count1 <= md_InstrumentID.size() / 500; count1++)
 		{
 			if (count1 < md_InstrumentID.size() / 500)
@@ -271,7 +272,7 @@ public:
 				int a = 0;
 				for (a; a < 500; a++)
 				{
-					ppInstrumentID[a] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[a] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->UnSubscribeMarketData(ppInstrumentID, a);
@@ -282,7 +283,7 @@ public:
 				int count2 = 0;
 				for (count2; count2 < md_InstrumentID.size() % 500; count2++)
 				{
-					ppInstrumentID[count2] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[count2] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->UnSubscribeMarketData(ppInstrumentID, count2);
@@ -291,7 +292,7 @@ public:
 		}
 	}
 
-	virtual void OnRspUnSubMarketData(CThostFtdcSpecificInstrumentField *pSpecificInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUnSubMarketData(CThostFtdcSpecificInstrumentField* pSpecificInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspUnSubMarketData>\n");
 		if (pSpecificInstrument)
@@ -315,7 +316,7 @@ public:
 	void SubscribeMarketData()//收行情
 	{
 		int md_num = 0;
-		char **ppInstrumentID = new char*[5000];
+		char** ppInstrumentID = new char* [5000];
 		for (int count1 = 0; count1 <= md_InstrumentID.size() / 500; count1++)
 		{
 			if (count1 < md_InstrumentID.size() / 500)
@@ -323,7 +324,7 @@ public:
 				int a = 0;
 				for (a; a < 500; a++)
 				{
-					ppInstrumentID[a] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[a] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->SubscribeMarketData(ppInstrumentID, a);
@@ -334,7 +335,7 @@ public:
 				int count2 = 0;
 				for (count2; count2 < md_InstrumentID.size() % 500; count2++)
 				{
-					ppInstrumentID[count2] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[count2] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->SubscribeMarketData(ppInstrumentID, count2);
@@ -343,7 +344,7 @@ public:
 		}
 	}
 
-	virtual void OnRspSubMarketData(CThostFtdcSpecificInstrumentField *pSpecificInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspSubMarketData(CThostFtdcSpecificInstrumentField* pSpecificInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspSubMarketData>\n");
 		if (pSpecificInstrument)
@@ -365,13 +366,15 @@ public:
 	};
 
 	///深度行情通知
-	virtual void OnRtnDepthMarketData(CThostFtdcDepthMarketDataField *pDepthMarketData)
+	virtual void OnRtnDepthMarketData(CThostFtdcDepthMarketDataField* pDepthMarketData)
 	{
 		if (pDepthMarketData)
 		{
-			auto p = (CThostFtdcDepthMarketDataField*)m_mmap.data();
+			auto p = (DepthMarketData*)m_mmap.data();
 			auto q = p + m_curr_row;
-			memcpy((void*)q, pDepthMarketData, sizeof(CThostFtdcDepthMarketDataField));
+			memcpy(&q->data, pDepthMarketData, sizeof(CThostFtdcDepthMarketDataField));
+			// *100后才是纳秒，与pandas的时间配套
+			q->now = chrono::system_clock::now().time_since_epoch().count() * 100;
 			++m_curr_row;
 		}
 		//获取系统时间
@@ -437,7 +440,7 @@ public:
 	void SubscribeForQuoteRsp()
 	{
 		int md_num = 0;
-		char **ppInstrumentID = new char*[5000];
+		char** ppInstrumentID = new char* [5000];
 		for (int count1 = 0; count1 <= md_InstrumentID.size() / 500; count1++)
 		{
 			if (count1 < md_InstrumentID.size() / 500)
@@ -445,7 +448,7 @@ public:
 				int a = 0;
 				for (a; a < 500; a++)
 				{
-					ppInstrumentID[a] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[a] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->SubscribeForQuoteRsp(ppInstrumentID, a);
@@ -456,7 +459,7 @@ public:
 				int count2 = 0;
 				for (count2; count2 < md_InstrumentID.size() % 500; count2++)
 				{
-					ppInstrumentID[count2] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[count2] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->SubscribeForQuoteRsp(ppInstrumentID, count2);
@@ -465,7 +468,7 @@ public:
 		}
 	}
 
-	virtual void OnRspSubForQuoteRsp(CThostFtdcSpecificInstrumentField *pSpecificInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspSubForQuoteRsp(CThostFtdcSpecificInstrumentField* pSpecificInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspSubForQuoteRsp>\n");
 		if (pSpecificInstrument)
@@ -489,7 +492,7 @@ public:
 	void UnSubscribeForQuoteRsp()
 	{
 		int md_num = 0;
-		char **ppInstrumentID = new char*[5000];
+		char** ppInstrumentID = new char* [5000];
 		for (int count1 = 0; count1 <= md_InstrumentID.size() / 500; count1++)
 		{
 			if (count1 < md_InstrumentID.size() / 500)
@@ -497,7 +500,7 @@ public:
 				int a = 0;
 				for (a; a < 500; a++)
 				{
-					ppInstrumentID[a] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[a] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->UnSubscribeForQuoteRsp(ppInstrumentID, a);
@@ -508,7 +511,7 @@ public:
 				int count2 = 0;
 				for (count2; count2 < md_InstrumentID.size() % 500; count2++)
 				{
-					ppInstrumentID[count2] = const_cast<char *>(md_InstrumentID.at(md_num).c_str());
+					ppInstrumentID[count2] = const_cast<char*>(md_InstrumentID.at(md_num).c_str());
 					md_num++;
 				}
 				int result = m_pUserMdApi->UnSubscribeForQuoteRsp(ppInstrumentID, count2);
@@ -517,7 +520,7 @@ public:
 		}
 	}
 
-	virtual void OnRspUnSubForQuoteRsp(CThostFtdcSpecificInstrumentField *pSpecificInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUnSubForQuoteRsp(CThostFtdcSpecificInstrumentField* pSpecificInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspUnSubForQuoteRsp>\n");
 		if (pSpecificInstrument)
@@ -539,7 +542,7 @@ public:
 	};
 
 	///询价通知
-	virtual void OnRtnForQuoteRsp(CThostFtdcForQuoteRspField *pForQuoteRsp)
+	virtual void OnRtnForQuoteRsp(CThostFtdcForQuoteRspField* pForQuoteRsp)
 	{
 		LOG("<OnRtnForQuoteRsp>\n");
 		if (pForQuoteRsp)
@@ -567,7 +570,7 @@ public:
 		LOG((b == 0) ? "请求查询组播合约......发送成功\n" : "请求查询组播合约......发送失败，序号=[%d]\n", b);
 	}
 
-	virtual void OnRspQryMulticastInstrument(CThostFtdcMulticastInstrumentField *pMulticastInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryMulticastInstrument(CThostFtdcMulticastInstrumentField* pMulticastInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspQryMulticastInstrument>\n");
 		if (pMulticastInstrument)
@@ -591,14 +594,14 @@ public:
 
 private:
 	// 指向CThostFtdcMduserApi实例的指针
-	CThostFtdcMdApi *m_pUserMdApi;
+	CThostFtdcMdApi* m_pUserMdApi;
 };
 
 //交易类
 class CSimpleHandler : public CTraderSpi
 {
 public:
-	CSimpleHandler(CThostFtdcTraderApi *pUserApi) :
+	CSimpleHandler(CThostFtdcTraderApi* pUserApi) :
 		m_pUserApi(pUserApi) {}
 	~CSimpleHandler() {}
 	virtual void OnFrontConnected()
@@ -692,7 +695,7 @@ public:
 	}
 
 	///客户端认证响应
-	virtual void OnRspAuthenticate(CThostFtdcRspAuthenticateField *pRspAuthenticateField, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspAuthenticate(CThostFtdcRspAuthenticateField* pRspAuthenticateField, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspAuthenticate(pRspAuthenticateField, pRspInfo, nRequestID, bIsLast);
@@ -727,16 +730,16 @@ public:
 		m_pUserApi->ReqUserLogin(&reqUserLogin, nRequestID++);
 	}
 
-	virtual void OnRspUserLogin(CThostFtdcRspUserLoginField *pRspUserLogin,
-		CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUserLogin(CThostFtdcRspUserLoginField* pRspUserLogin,
+		CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		//pUserApi->Release();
 		FrontID = pRspUserLogin->FrontID;
 		SessionID = pRspUserLogin->SessionID;
 		CTraderSpi::OnRspUserLogin(pRspUserLogin, pRspInfo, nRequestID, bIsLast);
-		
+
 		if (pRspInfo->ErrorID != 0)
-		//if (pRspInfo)
+			//if (pRspInfo)
 		{
 			LOG("\tFailed to login, errorcode=[%d]\n \terrormsg=[%s]\n \trequestid = [%d]\n \tchain = [%d]\n",
 				pRspInfo->ErrorID, pRspInfo->ErrorMsg, nRequestID, bIsLast);
@@ -754,7 +757,7 @@ public:
 	}
 
 	///登出请求响应
-	virtual void OnRspUserLogout(CThostFtdcUserLogoutField *pUserLogout, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUserLogout(CThostFtdcUserLogoutField* pUserLogout, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		LOG("<OnRspUserLogout>\n");
 		if (pUserLogout)
@@ -786,8 +789,8 @@ public:
 	}
 
 	///投资者结算结果确认响应
-	virtual void OnRspSettlementInfoConfirm(CThostFtdcSettlementInfoConfirmField *pSettlementInfoConfirm,
-		CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspSettlementInfoConfirm(CThostFtdcSettlementInfoConfirmField* pSettlementInfoConfirm,
+		CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspSettlementInfoConfirm(pSettlementInfoConfirm, pRspInfo, nRequestID, bIsLast);
 		SetEvent(g_hEvent);
@@ -809,7 +812,7 @@ public:
 	}
 
 	///用户口令更新请求响应
-	virtual void OnRspUserPasswordUpdate(CThostFtdcUserPasswordUpdateField *pUserPasswordUpdate, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspUserPasswordUpdate(CThostFtdcUserPasswordUpdateField* pUserPasswordUpdate, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspUserPasswordUpdate(pUserPasswordUpdate, pRspInfo, nRequestID, bIsLast);
 		SetEvent(g_hEvent);
@@ -832,7 +835,7 @@ public:
 	}
 
 	///资金账户口令更新请求响应
-	virtual void OnRspTradingAccountPasswordUpdate(CThostFtdcTradingAccountPasswordUpdateField *pTradingAccountPasswordUpdate, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspTradingAccountPasswordUpdate(CThostFtdcTradingAccountPasswordUpdateField* pTradingAccountPasswordUpdate, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspTradingAccountPasswordUpdate(pTradingAccountPasswordUpdate, pRspInfo, nRequestID, bIsLast);
 		SetEvent(g_hEvent);
@@ -1004,16 +1007,16 @@ public:
 		strcpy_s(ord.InstrumentID, g_chInstrumentID);
 		strcpy_s(ord.UserID, g_chUserID);
 		OrderRef_num++;
-		itoa(OrderRef_num, ord.OrderRef,10);
+		itoa(OrderRef_num, ord.OrderRef, 10);
 		//strcpy_s(ord.OrderRef,"");
 		//strcpy_s(ord.OrderRef, itoa(OrderRef_num));
 		ord.OrderPriceType = THOST_FTDC_OPT_LimitPrice;
 		ord.CombOffsetFlag[0] = THOST_FTDC_OF_Open;
-		
+
 		int num1;
 	Direction:LOG("请选择买卖方向\t1.买\t2.卖\n");
 		cin >> num1;
-		if(num1==1){
+		if (num1 == 1) {
 			ord.Direction = THOST_FTDC_D_Buy;//买
 		}
 		else if (num1 == 2) {
@@ -1451,8 +1454,8 @@ public:
 		//a.OrderActionRef = 1;
 		a.FrontID = g_chFrontID;
 		//a.SessionID = g_chSessionID;
-		strcpy_s(a.ExchangeID,g_chExchangeID);
-		strcpy_s(a.UserID,g_chUserID);
+		strcpy_s(a.ExchangeID, g_chExchangeID);
+		strcpy_s(a.UserID, g_chUserID);
 		int ab = m_pUserApi->ReqBatchOrderAction(&a, nRequestID++);
 		LOG((ab == 0) ? "批量报单操作请求......发送成功\n" : "批量报单操作请求......发送失败，序号=[%d]\n", ab);
 	}
@@ -1665,7 +1668,7 @@ public:
 	}
 
 	///请求查询资金账户响应
-	virtual void OnRspQryTradingAccount(CThostFtdcTradingAccountField *pTradingAccount, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryTradingAccount(CThostFtdcTradingAccountField* pTradingAccount, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspQryTradingAccount(pTradingAccount, pRspInfo, nRequestID, bIsLast);
 	};
@@ -1676,12 +1679,12 @@ public:
 		CThostFtdcQryInvestorPositionField a = { 0 };
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		strcpy_s(a.InvestorID, g_chInvestorID);
-	/*	string instr;
-		instr.clear();
-		cin.ignore();
-		LOG("请输入合约代码(不输入则为空)：\n");
-		getline(cin, instr);
-		strcpy_s(a.InstrumentID, instr.c_str());*/
+		/*	string instr;
+			instr.clear();
+			cin.ignore();
+			LOG("请输入合约代码(不输入则为空)：\n");
+			getline(cin, instr);
+			strcpy_s(a.InstrumentID, instr.c_str());*/
 		strcpy_s(a.InstrumentID, g_chInstrumentID);
 		/*string exch;
 		exch.clear();
@@ -1737,7 +1740,7 @@ public:
 		CThostFtdcQryInstrumentMarginRateField a = { 0 };
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		strcpy_s(a.InvestorID, g_chInvestorID);
-		strcpy_s(a.ExchangeID,g_chExchangeID);
+		strcpy_s(a.ExchangeID, g_chExchangeID);
 		strcpy_s(a.InstrumentID, g_chInstrumentID);
 		a.HedgeFlag = THOST_FTDC_HF_Speculation;//投机
 		int b = m_pUserApi->ReqQryInstrumentMarginRate(&a, nRequestID++);
@@ -1824,7 +1827,7 @@ public:
 	}
 
 	///请求查询合约响应
-	virtual void OnRspQryInstrument(CThostFtdcInstrumentField *pInstrument, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryInstrument(CThostFtdcInstrumentField* pInstrument, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspQryInstrument(pInstrument, pRspInfo, nRequestID, bIsLast);
 		if (pInstrument)
@@ -1919,7 +1922,7 @@ public:
 	void ReqQryTransferBank()
 	{
 		CThostFtdcQryTransferBankField a = { 0 };
-		strcpy_s(a.BankID,"3");
+		strcpy_s(a.BankID, "3");
 		int b = m_pUserApi->ReqQryTransferBank(&a, nRequestID++);
 		LOG((b == 0) ? "请求查询转帐银行......发送成功\n" : "请求查询转帐银行......发送失败，错误序号=[%d]\n", b);
 	}
@@ -2054,7 +2057,7 @@ public:
 		LOG("请确认开平标志\t1.开仓\t2.平仓\n");
 		cin >> choose_Flag;
 
-		if (choose_Flag != 1 && choose_Flag!=2)
+		if (choose_Flag != 1 && choose_Flag != 2)
 		{
 			LOG("请重新选择开平标志\n");
 			_getch();
@@ -2085,19 +2088,19 @@ public:
 		strcpy_s(t.InvestorID, g_chInvestorID);
 		strcpy_s(t.InstrumentID, g_chInstrumentID);
 		strcpy_s(t.ExchangeID, g_chExchangeID);
-		
+
 		strcpy_s(t.QuoteRef, quoteref.c_str());
 		strcpy_s(t.UserID, g_chUserID);
 		t.AskPrice = price_ask;
 		t.BidPrice = price_bid;
 		t.AskVolume = 1;
 		t.BidVolume = 1;
-		if (choose_Flag ==1)
+		if (choose_Flag == 1)
 		{
 			t.AskOffsetFlag = THOST_FTDC_OF_Open;///卖开平标志
 			t.BidOffsetFlag = THOST_FTDC_OF_Open;///买开平标志
 		}
-		else if (choose_Flag ==2)
+		else if (choose_Flag == 2)
 		{
 			t.AskOffsetFlag = THOST_FTDC_OF_Close;///卖开平标志
 			t.BidOffsetFlag = THOST_FTDC_OF_Close;///买开平标志
@@ -2118,7 +2121,7 @@ public:
 	}
 
 	///报价通知
-	virtual void OnRtnQuote(CThostFtdcQuoteField *pQuote) 
+	virtual void OnRtnQuote(CThostFtdcQuoteField* pQuote)
 	{
 		if (pQuote && strcmp(pQuote->InvestorID, g_chInvestorID) != 0)
 		{
@@ -2192,12 +2195,12 @@ public:
 		web_address.append(k);
 		web_address.append("&passwd=");
 		web_address.append(pCFMMCTradingAccountToken->Token);
-		LOG("web地址为:%s\n",web_address.c_str());
+		LOG("web地址为:%s\n", web_address.c_str());
 	};
 
 
 	///报单操作错误回报
-	virtual void OnErrRtnOrderAction(CThostFtdcOrderActionField *pOrderAction, CThostFtdcRspInfoField *pRspInfo)
+	virtual void OnErrRtnOrderAction(CThostFtdcOrderActionField* pOrderAction, CThostFtdcRspInfoField* pRspInfo)
 	{
 		if (pOrderAction && strcmp(pOrderAction->InvestorID, g_chInvestorID) != 0)
 		{
@@ -2205,13 +2208,13 @@ public:
 		}
 		else
 		{
-			CTraderSpi::OnErrRtnOrderAction(pOrderAction,pRspInfo);
+			CTraderSpi::OnErrRtnOrderAction(pOrderAction, pRspInfo);
 			SetEvent(g_hEvent);
 		}
 	}
 
 	///报单录入请求响应
-	virtual void OnRspOrderInsert(CThostFtdcInputOrderField *pInputOrder, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspOrderInsert(CThostFtdcInputOrderField* pInputOrder, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		if (pInputOrder && strcmp(pInputOrder->InvestorID, g_chInvestorID) != 0)
@@ -2220,12 +2223,12 @@ public:
 		}
 		else
 		{
-			CTraderSpi::OnRspOrderInsert(pInputOrder,pRspInfo,nRequestID,bIsLast);
+			CTraderSpi::OnRspOrderInsert(pInputOrder, pRspInfo, nRequestID, bIsLast);
 		}
 	}
 
 	///报单录入错误回报
-	virtual void OnErrRtnOrderInsert(CThostFtdcInputOrderField *pInputOrder, CThostFtdcRspInfoField *pRspInfo)
+	virtual void OnErrRtnOrderInsert(CThostFtdcInputOrderField* pInputOrder, CThostFtdcRspInfoField* pRspInfo)
 	{
 		if (pInputOrder && strcmp(pInputOrder->InvestorID, g_chInvestorID) != 0)
 		{
@@ -2239,7 +2242,7 @@ public:
 	}
 
 	///报单通知
-	virtual void OnRtnOrder(CThostFtdcOrderField *pOrder)
+	virtual void OnRtnOrder(CThostFtdcOrderField* pOrder)
 	{
 		if (pOrder && strcmp(pOrder->InvestorID, g_chInvestorID) != 0)
 		{
@@ -2267,7 +2270,7 @@ public:
 			{
 				chioce_action = 0;
 				LOG("未成交还在队列中\n\n");
-				
+
 			}if (pOrder->OrderStatus == THOST_FTDC_OST_NoTradeNotQueueing)///未成交不在队列中
 			{
 				LOG("未成交不在队列中\n\n");
@@ -2292,7 +2295,7 @@ public:
 	}
 
 	///删除预埋单响应
-	virtual void OnRspRemoveParkedOrder(CThostFtdcRemoveParkedOrderField *pRemoveParkedOrder, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspRemoveParkedOrder(CThostFtdcRemoveParkedOrderField* pRemoveParkedOrder, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		if (pRemoveParkedOrder && strcmp(pRemoveParkedOrder->InvestorID, g_chInvestorID) != 0)
@@ -2308,7 +2311,7 @@ public:
 	}
 
 	///删除预埋撤单响应
-	virtual void OnRspRemoveParkedOrderAction(CThostFtdcRemoveParkedOrderActionField *pRemoveParkedOrderAction, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspRemoveParkedOrderAction(CThostFtdcRemoveParkedOrderActionField* pRemoveParkedOrderAction, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		if (pRemoveParkedOrderAction && strcmp(pRemoveParkedOrderAction->InvestorID, g_chInvestorID) != 0)
@@ -2324,7 +2327,7 @@ public:
 	}
 
 	///预埋单录入请求响应
-	virtual void OnRspParkedOrderInsert(CThostFtdcParkedOrderField *pParkedOrder, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspParkedOrderInsert(CThostFtdcParkedOrderField* pParkedOrder, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		if (pParkedOrder && strcmp(pParkedOrder->InvestorID, g_chInvestorID) != 0)
@@ -2340,7 +2343,7 @@ public:
 	}
 
 	///预埋撤单录入请求响应
-	virtual void OnRspParkedOrderAction(CThostFtdcParkedOrderActionField *pParkedOrderAction, CThostFtdcRspInfoField *pRspInfo,
+	virtual void OnRspParkedOrderAction(CThostFtdcParkedOrderActionField* pParkedOrderAction, CThostFtdcRspInfoField* pRspInfo,
 		int nRequestID, bool bIsLast)
 	{
 		if (pParkedOrderAction && strcmp(pParkedOrderAction->InvestorID, g_chInvestorID) != 0)
@@ -2350,25 +2353,25 @@ public:
 		else
 		{
 			strcpy_s(g_chParkedOrderActionID1, pParkedOrderAction->ParkedOrderActionID);
-			CTraderSpi::OnRspParkedOrderAction(pParkedOrderAction,pRspInfo,nRequestID,bIsLast);
+			CTraderSpi::OnRspParkedOrderAction(pParkedOrderAction, pRspInfo, nRequestID, bIsLast);
 			SetEvent(g_hEvent);
 		}
 	}
 
 	///请求查询预埋撤单响应
-	virtual void OnRspQryParkedOrderAction(CThostFtdcParkedOrderActionField *pParkedOrderAction, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryParkedOrderAction(CThostFtdcParkedOrderActionField* pParkedOrderAction, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		CTraderSpi::OnRspQryParkedOrderAction(pParkedOrderAction, pRspInfo, nRequestID, bIsLast);
 	}
 
 	///请求查询预埋单响应
-	virtual void OnRspQryParkedOrder(CThostFtdcParkedOrderField *pParkedOrder, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryParkedOrder(CThostFtdcParkedOrderField* pParkedOrder, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
-		CTraderSpi::OnRspQryParkedOrder(pParkedOrder,pRspInfo,nRequestID,bIsLast);
+		CTraderSpi::OnRspQryParkedOrder(pParkedOrder, pRspInfo, nRequestID, bIsLast);
 	}
 
 	///请求查询报单响应
-	virtual void OnRspQryOrder(CThostFtdcOrderField *pOrder, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryOrder(CThostFtdcOrderField* pOrder, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		if (pOrder) {
 			vector_OrderSysID.push_back(pOrder->OrderSysID);
@@ -2378,13 +2381,13 @@ public:
 			vector_FrontID.push_back(pOrder->FrontID);
 			vector_SessionID.push_back(pOrder->SessionID);
 		}
-		CTraderSpi::OnRspQryOrder(pOrder,pRspInfo,nRequestID,bIsLast);
+		CTraderSpi::OnRspQryOrder(pOrder, pRspInfo, nRequestID, bIsLast);
 		action_number++;
 		LOG("\n查询序号：\"%d\"\n\n", action_number);
 	}
 
 	///执行宣告通知
-	virtual void OnRtnExecOrder(CThostFtdcExecOrderField *pExecOrder) 
+	virtual void OnRtnExecOrder(CThostFtdcExecOrderField* pExecOrder)
 	{
 		if (pExecOrder) {
 			strcpy_s(g_NewExecOrderRef, pExecOrder->ExecOrderRef);
@@ -2412,7 +2415,7 @@ public:
 
 		CThostFtdcReqTransferField a = { 0 };
 		strcpy_s(a.TradeCode, "202001");///业务功能码
-	int bankid = 0;
+		int bankid = 0;
 		while (bankid != 1 & 2 & 3 & 5 & 6 & 7 & 8 & 9 & 10 & 11 & 12 & 13 & 14 & 15 & 16) {
 			LOG("请输入你需要的转账的银行\n");
 			LOG("1.工商银行\n");
@@ -2442,8 +2445,8 @@ public:
 				_getch();
 			}
 		}
-		
-		
+
+
 		strcpy_s(a.BankBranchID, "0000");///期商代码
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		//strcpy_s(a.TradeDate, "20170829");///交易日期
@@ -2488,7 +2491,7 @@ public:
 
 		CThostFtdcReqTransferField a = { 0 };
 		strcpy_s(a.TradeCode, "202002");///业务功能码
-		bankid_new:int bankid = 0;
+	bankid_new:int bankid = 0;
 		LOG("请输入你需要的转账的银行\n");
 		LOG("1.工商银行\n");
 		LOG("2.农业银行\n");
@@ -2559,7 +2562,7 @@ public:
 		strcpy_s(a.OptionSelfCloseRef, "1");
 		strcpy_s(a.UserID, g_chUserID);
 		a.Volume = 1;
-		
+
 		int choose_1 = 0;
 		while (choose_1 != 1 && choose_1 != 2 && choose_1 != 3 && choose_1 != 4) {
 			LOG("请选择投机套保标志\n1.投机\t2.套利\t3.套保\t4.做市商\n");
@@ -2573,7 +2576,7 @@ public:
 				_getch();
 			}
 		}
-		
+
 		int choose_2 = 0;
 		while (choose_2 != 1 && choose_2 != 2 && choose_2 != 3) {
 			LOG("请选择期权行权的头寸是否自对冲标志\n1.自对冲期权仓位\t2.保留期权仓位\t3.自对冲卖方履约后的期货仓位\n");
@@ -2599,7 +2602,7 @@ public:
 	}
 
 	///期权自对冲通知
-	virtual void OnRtnOptionSelfClose(CThostFtdcOptionSelfCloseField *pOptionSelfClose)
+	virtual void OnRtnOptionSelfClose(CThostFtdcOptionSelfCloseField* pOptionSelfClose)
 	{
 		if (pOptionSelfClose) {
 			g_chFrontID = pOptionSelfClose->FrontID;
@@ -2641,7 +2644,7 @@ public:
 	}
 
 	///请求查询期权自对冲响应
-	virtual void OnRspQryOptionSelfClose(CThostFtdcOptionSelfCloseField *pOptionSelfClose, CThostFtdcRspInfoField *pRspInfo, int nRequestID, bool bIsLast)
+	virtual void OnRspQryOptionSelfClose(CThostFtdcOptionSelfCloseField* pOptionSelfClose, CThostFtdcRspInfoField* pRspInfo, int nRequestID, bool bIsLast)
 	{
 		if (pOptionSelfClose) {
 			g_chFrontID = pOptionSelfClose->FrontID;
@@ -2655,7 +2658,7 @@ public:
 	///请求查询执行宣告
 	void ReqQryExecOrder()
 	{
-		CThostFtdcQryExecOrderField a = { 0 }; 
+		CThostFtdcQryExecOrderField a = { 0 };
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		strcpy_s(a.InvestorID, g_chInvestorID);
 		strcpy_s(a.InstrumentID, g_chInstrumentID);
@@ -2797,8 +2800,8 @@ public:
 	//请求查询交易员报盘机
 	void ReqQryTraderOffer()
 	{
-		CThostFtdcQryTraderOfferField a = {0};
-		strcpy_s(a.ExchangeID,"SHFE");
+		CThostFtdcQryTraderOfferField a = { 0 };
+		strcpy_s(a.ExchangeID, "SHFE");
 		//strcpy_s(a.ParticipantID, "SHFE");
 		//strcpy_s(a.TraderID, "SHFE");
 		int b = m_pUserApi->ReqQryTraderOffer(&a, nRequestID++);
@@ -2863,7 +2866,7 @@ public:
 		strcpy_s(a.Text, "");
 		a.ClientIPPort = 10000;
 		int b = m_pUserApi->ReqUserLoginWithText(&a, nRequestID++);
-		LOG((b == 0) ? "用户发出带有短信验证码的登陆请求......发送成功\n" : 
+		LOG((b == 0) ? "用户发出带有短信验证码的登陆请求......发送成功\n" :
 			"用户发出带有短信验证码的登陆请求......发送失败，错误序号=[%d]\n", b);
 	}
 
@@ -2914,8 +2917,8 @@ public:
 	void ReqQryCombPromotionParam()
 	{
 		CThostFtdcQryCombPromotionParamField a = { 0 };
-		strcpy_s(a.ExchangeID,"DCE");
-		strcpy_s(a.InstrumentID,"SPD m_o&m_o");
+		strcpy_s(a.ExchangeID, "DCE");
+		strcpy_s(a.InstrumentID, "SPD m_o&m_o");
 		int b = m_pUserApi->ReqQryCombPromotionParam(&a, nRequestID++);
 		LOG((b == 0) ? "请求组合优惠比例......发送成功\n" : "请求组合优惠比例......发送失败，错误序号=[%d]\n", b);
 	}
@@ -2929,7 +2932,7 @@ public:
 		a.HedgeFlag = THOST_FTDC_HF_Speculation;
 		strcpy_s(a.ExchangeID, g_chExchangeID);
 		strcpy_s(a.ProductGroupID, g_chInstrumentID);
-		strcpy_s(a.reserve1,g_chInstrumentID);
+		strcpy_s(a.reserve1, g_chInstrumentID);
 		int b = m_pUserApi->ReqQryInvestorProductGroupMargin(&a, nRequestID++);
 		LOG((b == 0) ? "请求查询投资者品种/跨品种保证金......发送成功\n" : "请求查询投资者品种/跨品种保证金......发送失败，错误序号=[%d]\n", b);
 	}
@@ -2941,7 +2944,7 @@ public:
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		//strcpy_s(a.reserve1, "");
 		a.HedgeFlag = THOST_FTDC_HF_Speculation;
-		strcpy_s(a.InstrumentID,g_chInstrumentID);
+		strcpy_s(a.InstrumentID, g_chInstrumentID);
 		int b = m_pUserApi->ReqQryExchangeMarginRateAdjust(&a, nRequestID++);
 		LOG((b == 0) ? "请求查询交易所调整保证金率......发送成功\n" : "请求查询交易所调整保证金率......发送失败，错误序号=[%d]\n", b);
 	}
@@ -2952,7 +2955,7 @@ public:
 		CThostFtdcQryRiskSettleInvstPositionField a = { 0 };
 		strcpy_s(a.BrokerID, g_chBrokerID);
 		strcpy_s(a.InvestorID, g_chInvestorID);
-		strcpy_s(a.InstrumentID,g_chInstrumentID);
+		strcpy_s(a.InstrumentID, g_chInstrumentID);
 		int b = m_pUserApi->ReqQryRiskSettleInvstPosition(&a, nRequestID++);
 		LOG((b == 0) ? "投资者风险结算持仓查询......发送成功\n" : "投资者风险结算持仓查询......发送失败，错误序号=[%d]\n", b);
 	}
@@ -2968,5 +2971,5 @@ public:
 
 
 private:
-	CThostFtdcTraderApi *m_pUserApi;
+	CThostFtdcTraderApi* m_pUserApi;
 };
